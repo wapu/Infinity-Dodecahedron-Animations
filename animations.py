@@ -115,7 +115,9 @@ class Particle():
             self.led.set_color(np.minimum(255, self.led.color + self.color))
 
 
+
 # Various animations
+
 class TrailingSparks(Animation):
 
     def __init__(self, dodecahedron, n_sparks=30, trail_style='linear'):
@@ -232,10 +234,11 @@ class PulsingCorners(Animation):
 class Lightning(Animation):
 
     class Strike():
-        def __init__(self, leds, sequence):
+        def __init__(self, leds, sequence, color):
             self.state = 0
             self.leds = leds
             self.sequence = sequence
+            self.color = color
 
     def __init__(self, dodecahedron, likelihood=1, afterglow=0.9):
         super().__init__(dodecahedron)
@@ -270,7 +273,8 @@ class Lightning(Animation):
             sequence /= np.max(sequence)
             sequence[-1] = 0.3
 
-            self.strikes.append(self.Strike(leds, sequence))
+            color = self.hls_to_rgb(np.random.rand(),.9,1)
+            self.strikes.append(self.Strike(leds, sequence, color))
 
         # Dim previous lights
         for led in self.d.leds:
@@ -279,7 +283,7 @@ class Lightning(Animation):
         # Display lightning
         for strike in self.strikes:
             for led in strike.leds:
-                led.set_color([255 * strike.sequence[strike.state]]*3)
+                led.set_color(strike.color * strike.sequence[strike.state])
             strike.state += 1
         self.strikes = [s for s in self.strikes if s.state < len(s.sequence)]
 
@@ -325,29 +329,25 @@ class CornerFireworks(Animation):
 
 class Glitter(Animation):
 
-    def __init__(self, dodecahedron, n_per_step=15, afterglow=0.8, color=(255,255,255)):
+    def __init__(self, dodecahedron, n_per_step=15, afterglow=0.8, colored=True):
         super().__init__(dodecahedron)
         self.n_per_step = n_per_step
         self.afterglow = afterglow
-        self.color = None if color is None else np.array(color)
+        self.color = None if colored else np.array([255,255,255])
 
     def step(self, t_delta_ms=0):
         # Dim previous lights
         for led in self.d.leds:
             led.set_color(led.color * self.afterglow)
+
         # Spawn new glitter lights
         for i in range(self.n_per_step):
             if self.color is None:
-                color = np.random.random_sample(3)**2
-                color = 255 * color / np.max(color)
+                color = self.hls_to_rgb(np.random.rand(), 0.8, 1)
             else:
                 color = self.color
             led = np.random.choice(self.d.leds)
             led.set_color(np.minimum(255, led.color + color))
-
-
-class WanderingLanterns(Animation):
-    pass
 
 
 class RollingHue(Animation):
@@ -406,7 +406,6 @@ class FlashOpposingEdges(Animation):
         self.timer += t_delta_ms / 1000
         if self.timer > self.interval:
             self.timer -= self.interval
-            print(self.timer)
 
             eligible = [p for p in self.pairs if p[0].leds[0].color.mean() < 2.5]
             pair = eligible[np.random.choice(len(eligible))]
@@ -415,6 +414,9 @@ class FlashOpposingEdges(Animation):
             pair[1].fill(color)
 
 
+
+class WanderingLanterns(Animation):
+    pass
 
 
 class StreamFromCorner(Animation):
