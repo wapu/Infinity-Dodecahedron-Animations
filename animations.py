@@ -4,6 +4,7 @@ from time import time
 from collections import deque
 
 
+
 # Base class, maybe unneccessary
 class Animation():
 
@@ -19,6 +20,11 @@ class Animation():
         color = 255 * color / np.max(color)
         return color
 
+    def random_hue(self):
+        return self.hls_to_rgb(np.random.rand())
+
+    def hls_to_rgb(self, hue, lightness=0.5, saturation=1.0):
+        return np.array(hls_to_rgb(hue, lightness, saturation)) * 255
 
 # General moving particle with fading trail
 class Particle():
@@ -42,13 +48,16 @@ class Particle():
         self.trail_style = trail_style
         self.trail = []
         self.color_decrement = self.color / (self.n_trailing + 1)
-        self.trail_factor = 0.01 ** (1/self.n_trailing + 1)
+        self.trail_factor = 0.01 ** (1/(self.n_trailing + 1))
         self.erosion = 1 / (self.n_trailing + 1)
 
         # Duration stuff
         self.duration = duration
         self.state = self.ALIVE
         self.end_style = end_style
+
+        # For swarm behavior
+        self.swarm = None
 
     def step(self, t_delta_ms=0):
         # Update trail
@@ -94,30 +103,31 @@ class Particle():
         # Move particle further along LED graph
         if self.state in [self.ALIVE, self.DYING]:
             next_options = [n for n in self.led.neighbors if n not in self.blocked]
-            next = np.random.choice(next_options)
+            if self.swarm is None or len(next_options) == 1:
+                next = np.random.choice(next_options)
+            else:
+                d_swarm = [(np.linalg.norm(self.led.pos - p.led.pos) + 0.001*np.random.rand(), p) for p in self.swarm if p is not self]
+                nearest_pos = sorted(d_swarm)[0][1].led.pos
+                d_options = [(np.linalg.norm(led.pos - nearest_pos) + 0.001*np.random.rand(), led) for led in next_options]
+                next = sorted(d_options)[-1][1]
             self.blocked = next_options + [self.led]
             self.led = next
-            self.update_color()
             self.led.set_color(np.minimum(255, self.led.color + self.color))
-
-
-    def update_color(self):
-        pass
 
 
 # Various animations
 class TrailingSparks(Animation):
 
-    def __init__(self, dodecahedron, n_sparks=30):
+    def __init__(self, dodecahedron, n_sparks=30, trail_style='linear'):
         super().__init__(dodecahedron)
 
         # Create sparks
         self.sparks = []
         for i in range(n_sparks):
-            start = np.random.choice(self.d.edges).leds[self.d.leds_per_edge//2]
-            self.sparks.append(
-                    Particle(start, self.random_rgb(), 10, trail_style='linear')
-                )
+            # start = np.random.choice(self.d.edges).leds[self.d.leds_per_edge//2]
+            start = np.random.choice(self.d.leds)
+            spark = Particle(start, self.random_rgb(), 10, trail_style=trail_style)
+            self.sparks.append(spark)
 
     def step(self, t_delta_ms=0):
         for spark in self.sparks:
@@ -125,7 +135,28 @@ class TrailingSparks(Animation):
 
 
 class RainbowWorms(Animation):
-    pass
+
+    def __init__(self, dodecahedron, n_worms=8):
+        super().__init__(dodecahedron)
+        self.worm_length = 5 * self.d.leds_per_edge
+        self.rainbow = [self.hls_to_rgb(h) for h in np.linspace(0, 1, self.worm_length)]
+
+        # Create worms
+        self.worms = []
+        for i in range(n_worms):
+            # start = np.random.choice(self.d.edges).leds[self.d.leds_per_edge//2]
+            start = np.random.choice(self.d.leds)
+            worm = Particle(start, (0,0,0), self.worm_length, trail_style='exponential')
+            worm.rainbow_index = np.random.randint(len(self.rainbow))
+            self.worms.append(worm)
+        for worm in self.worms:
+            worm.swarm = self.worms
+
+    def step(self, t_delta_ms=0):
+        for worm in self.worms:
+            worm.rainbow_index = (worm.rainbow_index + 1) % len(self.rainbow)
+            worm.color = self.rainbow[worm.rainbow_index]
+            worm.step()
 
 
 class LightUpFaces(Animation):
@@ -161,10 +192,6 @@ class LightUpFaces(Animation):
             if len(self.active) > self.cooldown:
                 self.inactive.append(self.active[0])
                 self.active = self.active[1:]
-
-
-class ClosedLoop(Animation):
-    pass
 
 
 class PulsingVertices(Animation):
@@ -217,7 +244,26 @@ class RollingHue(Animation):
             led.color = np.array(hls_to_rgb(hue, 0.5, 1.0)) * 255
 
 
+class Hamiltonian(Animation):
+
+    def __init__(self, dodecahedron):
+        super().__init__(dodecahedron)
+        self.path = self.d.find_hamiltonian(np.random.choice(self.d.vertices))
+
+    def step(self, t_delta_ms=0):
+        # Dim all previous colors
+        for led in self.d.leds:
+            led.set_color(led.color * 0.4)
+        # Light up every n-th LED with time dependent rainbow
+        offset = time() / 4
+        for i in range(int(time()*15)%5, len(self.path), 5):
+            self.path[i].set_color(self.hls_to_rgb((i/len(self.path) + offset)%1))
+
+
+
 ANIMATION_CYCLE = [
+    RainbowWorms,
+    Hamiltonian,
     LightUpFaces,
     RollingHue,
     TrailingSparks,

@@ -9,6 +9,7 @@ from dodecahedron import *
 from projection import *
 
 
+
 # Constants
 WIDTH = 1000
 HEIGHT = 1000

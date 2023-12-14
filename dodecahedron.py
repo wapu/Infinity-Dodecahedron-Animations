@@ -8,10 +8,17 @@ from animations import *
 
 class Vertex():
 
-    def __init__(self, pos, neighbors=[], edges=[]):
+    def __init__(self, pos, neighbors=None, edges=None):
         self.pos = pos
-        self.neighbors = list(neighbors)
-        self.edges = list(edges)
+        if neighbors is None:
+            self.neighbors = []
+        else:
+            self.neighbors = list(neighbors)
+        if edges is None:
+            self.edges = []
+        else:
+            self.edges = list(edges)
+
         # Polar coordinates
         x,y,z = pos
         xy = x*x + y*y
@@ -21,13 +28,21 @@ class Vertex():
 class Edge():
 
     def __init__(self, v0, v1, leds_per_edge):
+        # Neighborhood relations
         self.v0 = v0
         self.v1 = v1
         v0.neighbors.append(v1)
         v1.neighbors.append(v0)
         v0.edges.append(self)
         v1.edges.append(self)
+        self.faces = []
+
+        # Create the LED objects along this edge
         self.leds = [LED((1-t)*v0.pos + t*v1.pos) for t in np.linspace(0, 1, leds_per_edge+2)[1:-1]]
+
+    def flip(self):
+        self.v0, self.v1 = self.v1, self.v0
+        self.leds = self.leds[::-1]
 
     def fill(self, color):
         for led in self.leds:
@@ -39,13 +54,25 @@ class Edge():
 
 class Face():
 
-    def __init__(self, normal, vertices, edges):
-        self.vertices = [v for v in vertices if np.linalg.norm(v.pos - normal) < 2]
-        edges = [e for e in edges if e.v0 in self.vertices and e.v1 in self.vertices]
-        # print(len(edges))
-        # assert False
-        self.edges = edges
-        self.leds = list(chain(*[edge.leds for edge in self.edges]))
+    def __init__(self, normal, all_vertices, all_edges):
+        # Find the five vertices by proximity to face normal
+        self.vertices = [v for v in all_vertices if np.linalg.norm(v.pos - normal) < 2]
+
+        # Find the according edges and orient them to get a continuous list of LEDs
+        unsorted_edges = set([e for e in all_edges if e.v0 in self.vertices and e.v1 in self.vertices])
+        self.edges = [unsorted_edges.pop()]
+        self.leds = list(self.edges[0].leds)
+        while len(unsorted_edges) > 0:
+            next_edge = [e for e in unsorted_edges if self.edges[-1].v1 in (e.v0, e.v1)][0]
+            if self.edges[-1].v1 == next_edge.v1:
+                next_edge.flip()
+            unsorted_edges.remove(next_edge)
+            self.edges.append(next_edge)
+            self.leds.extend(next_edge.leds)
+        for e in self.edges:
+            e.faces.append(self)
+
+        # Initial color is off
         self.color = np.zeros(3)
 
     def fill(self, color):
@@ -58,10 +85,14 @@ class Face():
 
 class LED():
 
-    def __init__(self, pos, neighbors=[], color=(0.,0.,0.)):
+    def __init__(self, pos, neighbors=None, color=(0.,0.,0.)):
         self.pos = pos
-        self.neighbors = list(neighbors)
+        if neighbors is None:
+            self.neighbors = []
+        else:
+            self.neighbors = list(neighbors)
         self.color = np.array(color)
+
         # Polar coordinates
         x,y,z = pos
         xy = x*x + y*y
@@ -91,7 +122,7 @@ class Dodecahedron():
             (1/r, 0, r), (1/r, 0, -r), (-1/r, 0, r), (-1/r, 0, -r),
             (r, 1/r, 0), (r, -1/r, 0), (-r, 1/r, 0), (-r, -1/r, 0)
         ])
-        # Icosahedron coordinates
+        # Icosahedron coordinates (correspond to dodecahedron face normals)
         face_normals = np.array([
             (0, 1, r), (0, 1, -r), (0, -1, r), (0, -1, -r),
             (1, r, 0), (1, -r, 0), (-1, r, 0), (-1, -r, 0),
@@ -127,6 +158,33 @@ class Dodecahedron():
         self.animation_index = -1
         self.next_animation()
 
+    def find_hamiltonian(self, start, current=None, visited=None, current_path=None):
+        # Initialize recursion variables
+        if current is None:
+            current = start
+            visited = []
+            current_path = []
+
+        visited.append(current)
+
+        for edge in np.random.permutation(current.edges):
+            # Orient the edge
+            if edge.v0 is not current:
+                edge.flip()
+            # Check for success, in that case return LED list
+            if (edge.v1 is start) and (len(visited) == len(self.vertices)):
+                self.hamiltonian = current_path + edge.leds
+                return current_path + edge.leds
+            # If edge leads to new vertex, continue recursion
+            if edge.v1 not in visited:
+                found = self.find_hamiltonian(start, edge.v1, list(visited), current_path + edge.leds)
+                # If success further down the line, pass upwards
+                if found is not None:
+                    return found
+
+        # If no cycle found, return None
+        return None
+
     def turn_off(self):
         for led in self.leds:
             led.turn_off()
@@ -141,6 +199,7 @@ class Dodecahedron():
         self.animation_index = (self.animation_index + 1) % len(ANIMATION_CYCLE)
         self.animation = ANIMATION_CYCLE[self.animation_index](self)
         self.animation.initialize()
+
 
 
 
