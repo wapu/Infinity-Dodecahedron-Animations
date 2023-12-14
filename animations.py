@@ -47,7 +47,7 @@ class Particle():
         self.n_trailing = n_trailing
         self.trail_style = trail_style
         self.trail = []
-        self.color_decrement = self.color / (self.n_trailing + 1)
+        self.color_decrement = self.color / (self.n_trailing)
         self.trail_factor = 0.01 ** (1/(self.n_trailing + 1))
         self.erosion = 1 / (self.n_trailing + 1)
 
@@ -194,12 +194,133 @@ class LightUpFaces(Animation):
                 self.active = self.active[1:]
 
 
-class PulsingVertices(Animation):
-    pass
+class PulsingCorners(Animation):
+
+    class Corner():
+
+        def __init__(self, vertex, speed=5, phases=True):
+            self.leds = [e.leds if (e.v0 is vertex) else e.leds[::-1] for e in vertex.edges]
+            self.speed = speed + 0.01*speed*np.random.randn()
+            if phases:
+                self.phase = np.random.rand() * 2 * np.pi
+            else:
+                self.phase = 0
+            self.reroll()
+
+        def reroll(self):
+            self.hue = np.random.rand()
+            self.extents = [np.random.randint(2, len(self.leds[0])//2 + 3) for l in self.leds]
+
+    def __init__(self, dodecahedron, speed=5):
+        super().__init__(dodecahedron)
+        self.corners = [self.Corner(v, speed) for v in self.d.vertices]
+
+    def step(self, t_delta_ms=0):
+        self.d.turn_off()
+        for c in self.corners:
+            factor = (1 + np.sin(c.speed * time() + c.phase))/2
+            if factor < 2/self.d.leds_per_edge:
+                c.reroll()
+            for leds, extent in zip(c.leds, c.extents):
+                current_extent = int(extent * factor)
+                for i in range(current_extent):
+                    l = 0.25 + (i/current_extent)/2
+                    s = 0.25 + 0.75 * (i/current_extent)
+                    leds[i].set_color(self.hls_to_rgb(c.hue, l, s))
 
 
 class Lightning(Animation):
-    pass
+
+    class Strike():
+        def __init__(self, leds, sequence):
+            self.state = 0
+            self.leds = leds
+            self.sequence = sequence
+
+    def __init__(self, dodecahedron, likelihood=1, afterglow=0.9):
+        super().__init__(dodecahedron)
+        self.likelihood = likelihood
+        self.afterglow = afterglow
+
+        self.strikes = []
+        self.timer = 5
+
+    def step(self, t_delta_ms=0):
+        # Create new lightning strikes at stochastic intervals
+        self.timer += t_delta_ms/1000
+        if self.timer > 1 + 10*np.random.rand():
+            self.timer = 0
+
+            # Grow branches from random point of impact
+            origin = np.random.choice(self.d.leds)
+            leds = []
+            frontier = deque([(origin, 0),])
+            while len(frontier) > 0:
+                led, dist = frontier.popleft()
+                if (led not in leds) and (dist < 5*self.d.leds_per_edge) and (np.random.rand() > 0.002*dist):
+                    leds.append(led)
+                    for n in led.neighbors:
+                        frontier.append((n, dist+1))
+
+            # Create random flashing sequence
+            duration = np.random.randint(3, 6 + int(np.sqrt(len(leds))))
+            sequence = np.maximum(0, (np.random.rand(duration) > .6) - np.random.rand(duration)**2)
+            if sequence.sum() == 0:
+                sequence[0] = 1
+            sequence /= np.max(sequence)
+            sequence[-1] = 0.3
+
+            self.strikes.append(self.Strike(leds, sequence))
+
+        # Dim previous lights
+        for led in self.d.leds:
+            led.set_color(led.color * self.afterglow)
+
+        # Display lightning
+        for strike in self.strikes:
+            for led in strike.leds:
+                led.set_color([255 * strike.sequence[strike.state]]*3)
+            strike.state += 1
+        self.strikes = [s for s in self.strikes if s.state < len(s.sequence)]
+
+
+class CornerFireworks(Animation):
+
+    def __init__(self, dodecahedron, interval=.2, duration_between=(7,13), trail_style='linear'):
+        super().__init__(dodecahedron)
+        self.interval = interval
+        self.timer = 0
+        self.duration_between = duration_between
+        self.trail_style = trail_style
+        self.sparks = []
+
+    def step(self, t_delta_ms=0):
+        # Update existing sparks
+        self.sparks = [s for s in self.sparks if s.state != Particle.GONE]
+        for spark in self.sparks:
+            spark.step()
+
+        # Create fireworks
+        self.timer += t_delta_ms / 1000
+        if self.timer > self.interval:
+            self.timer -= self.interval
+
+            v = np.random.choice(self.d.vertices)
+            starts = [e.leds[0] if (e.v0 is v) else e.leds[-1] for e in v.edges]
+            color = self.hls_to_rgb(np.random.rand(), 0.7, 1)
+
+            spark0 = Particle(starts[0], color, 10, trail_style=self.trail_style, duration=np.random.randint(*self.duration_between))
+            spark0.blocked = [starts[1], starts[2]]
+            self.sparks.append(spark0)
+
+            spark1 = Particle(starts[1], color, 10, trail_style=self.trail_style, duration=np.random.randint(*self.duration_between))
+            spark1.blocked = [starts[0], starts[2]]
+            self.sparks.append(spark1)
+
+            spark2 = Particle(starts[2], color, 10, trail_style=self.trail_style, duration=np.random.randint(*self.duration_between))
+            spark2.blocked = [starts[1], starts[0]]
+            self.sparks.append(spark2)
+
 
 
 class Glitter(Animation):
@@ -236,12 +357,15 @@ class RollingHue(Animation):
         self.speed = speed
 
     def step(self, t_delta_ms=0):
-        for led in self.d.leds:
-            # hue = np.cos(2*led.theta + led.phi) / 2 + 0.5
-            hue = np.sin(led.theta + self.speed * time()) / 2 + 0.5
-            # hue = np.cos(2*led.theta + 3*time()) / 2 + 0.5
-            # hue = np.cos(2*led.theta + led.phi + 3*time()) / 2 + 0.5
-            led.color = np.array(hls_to_rgb(hue, 0.5, 1.0)) * 255
+        for edge in self.d.edges:
+            for led in edge.leds[::2]:
+                hue = np.sin(led.theta + self.speed * time())/2 + 0.5
+                lightness = np.sin(self.speed * time())/4 + 0.25
+                led.color = np.array(hls_to_rgb(hue, lightness, 1.0)) * 255
+            for led in edge.leds[1::2]:
+                hue = np.sin(led.theta + self.speed * time())/2 + 0.5
+                lightness = np.sin(self.speed * time() + np.pi)/4 + 0.25
+                led.color = np.array(hls_to_rgb(hue, lightness, 1.0)) * 255
 
 
 class Hamiltonian(Animation):
@@ -260,8 +384,54 @@ class Hamiltonian(Animation):
             self.path[i].set_color(self.hls_to_rgb((i/len(self.path) + offset)%1))
 
 
+class FlashOpposingEdges(Animation):
+
+    def __init__(self, dodecahedron, interval=.25):
+        super().__init__(dodecahedron)
+        self.interval = interval
+        self.timer = 0
+
+        centers = [(e.v0.pos + e.v1.pos)/2 for e in self.d.edges]
+        self.pairs = []
+        for i in range(len(centers)):
+            j = np.argmin([np.linalg.norm(centers[i] + centers[j]) for j in range(len(centers))])
+            self.pairs.append((self.d.edges[i], self.d.edges[j]))
+
+    def step(self, t_delta_ms=0):
+        # Dim existing colors
+        for led in self.d.leds:
+            led.set_color(led.color * 0.9)
+
+        # Every <interval> seconds, flash new pair
+        self.timer += t_delta_ms / 1000
+        if self.timer > self.interval:
+            self.timer -= self.interval
+            print(self.timer)
+
+            eligible = [p for p in self.pairs if p[0].leds[0].color.mean() < 2.5]
+            pair = eligible[np.random.choice(len(eligible))]
+            color = self.random_rgb()
+            pair[0].fill(color)
+            pair[1].fill(color)
+
+
+
+
+class StreamFromCorner(Animation):
+    pass
+
+
+class RotatingTiles(Animation):
+    pass
+
+
+
 
 ANIMATION_CYCLE = [
+    Lightning,
+    CornerFireworks,
+    FlashOpposingEdges,
+    PulsingCorners,
     RainbowWorms,
     Hamiltonian,
     LightUpFaces,

@@ -55,7 +55,7 @@ while not done:
     screen.fill((0,0,0))
 
     # Animate LEDs
-    d.animation.step()
+    d.animation.step(t_delta_ms)
 
     # Rotate camera matrix
     angle += 0.001 * np.pi
