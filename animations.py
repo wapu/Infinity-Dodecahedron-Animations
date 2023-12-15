@@ -20,11 +20,16 @@ class Animation():
         color = 255 * color / np.max(color)
         return color
 
-    def random_hue(self):
-        return self.hls_to_rgb(np.random.rand())
+    def random_hue(self, start=0, end=1, lightness=0.5, saturation=1.0):
+        hue = start + np.random.rand() * (end - start)
+        return self.hls_to_rgb(hue % 1.0, lightness, saturation)
 
     def hls_to_rgb(self, hue, lightness=0.5, saturation=1.0):
         return np.array(hls_to_rgb(hue, lightness, saturation)) * 255
+
+    def hermite(self, t):
+        return 3*t*t - 2*t*t*t
+
 
 # General moving particle with fading trail
 class Particle():
@@ -414,6 +419,94 @@ class FlashOpposingEdges(Animation):
             pair[1].fill(color)
 
 
+class RotatingTiles(Animation):
+
+    class Tile():
+
+        def __init__(self, face):
+            self.face = face
+            self.reset()
+
+        def reset(self):
+            self.progress = 0
+            self.timer = 0
+            self.duration = 0.5 + 2.5 * np.random.rand()
+            self.cooldown = 10
+            self.reversed = np.random.rand() < 1/2
+
+    def __init__(self, dodecahedron):
+        super().__init__(dodecahedron)
+
+        self.inactive = [self.Tile(f) for f in self.d.faces]
+        np.random.shuffle(self.inactive)
+        self.active = [self.inactive.pop()]
+
+    def initialize(self):
+        super().initialize()
+
+        # Fill each edge with its own color and pattern
+        for edge in self.d.edges:
+            hue_start = np.random.rand()
+            hue_range = 0.3 * np.random.rand()
+
+            for i in range(2,self.d.leds_per_edge//2):
+                x = i - self.d.leds_per_edge//2 + 1
+                stretch = 0.5 + 5.0 * np.random.rand()
+                lightness = (1 + np.cos(stretch * x))/2
+                lightness = 0.66 * lightness**2
+                color = self.random_hue(hue_start, hue_start+hue_range, lightness, 1)
+                edge.leds[i].set_color(color)
+                edge.leds[-(i+1)].set_color(color)
+
+            edge.leds[self.d.leds_per_edge//2].set_color(self.hls_to_rgb(hue_start + hue_range/2))
+
+    def step(self, t_delta_ms=0):
+
+        # Rotate active tiles
+        for tile in self.active:
+            # Only update at the speed needed for given duration
+            tile.timer += t_delta_ms / 1000
+            if (tile.progress/self.d.leds_per_edge) < (tile.timer/tile.duration):
+                # Rotate by one LED in set direction
+                leds = tile.face.leds
+                if not tile.reversed:
+                    first = np.array(leds[0].color)
+                    for i in range(len(leds) - 1):
+                        leds[i].set_color(leds[i+1].color)
+                    leds[-1].set_color(first)
+                else:
+                    first = np.array(leds[-1].color)
+                    for i in range(len(leds)-1, 0, -1):
+                        leds[i].set_color(leds[i-1].color)
+                    leds[0].set_color(first)
+                tile.progress += 1
+
+        # Update inactive tiles
+        for tile in self.inactive:
+            tile.cooldown -= 1
+
+        # Find an inactive tile that has no currently active neighbors and activate it
+        active_faces = [t.face for t in self.active]
+        activate = None
+        for i, tile in enumerate(self.inactive):
+            if all(n not in active_faces for n in tile.face.neighbors) and tile.cooldown <= 0:
+                activate = i
+                break
+
+        if activate is not None:
+            self.active.append(self.inactive.pop(activate))
+
+        # Update active and inactive lists
+        active_updated = []
+        for tile in self.active:
+            if tile.progress >= self.d.leds_per_edge:
+                tile.reset()
+                self.inactive.append(tile)
+            else:
+                active_updated.append(tile)
+        self.active = active_updated
+        np.random.shuffle(self.inactive)
+
 
 class WanderingLanterns(Animation):
     pass
@@ -423,13 +516,10 @@ class StreamFromCorner(Animation):
     pass
 
 
-class RotatingTiles(Animation):
-    pass
-
-
 
 
 ANIMATION_CYCLE = [
+    RotatingTiles,
     Lightning,
     CornerFireworks,
     FlashOpposingEdges,

@@ -69,8 +69,15 @@ class Face():
             unsorted_edges.remove(next_edge)
             self.edges.append(next_edge)
             self.leds.extend(next_edge.leds)
+
+        # Neighborhood stuff
+        self.neighbors = []
         for e in self.edges:
+            self.neighbors.extend(e.faces)
             e.faces.append(self)
+        for neighbor in self.neighbors:
+            if not self in neighbor.neighbors:
+                neighbor.neighbors.append(self)
 
         # Initial color is off
         self.color = np.zeros(3)
