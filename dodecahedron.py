@@ -92,13 +92,14 @@ class Face():
 
 class LED():
 
-    def __init__(self, pos, neighbors=None, color=(0.,0.,0.)):
+    def __init__(self, pos, neighbors=None):
         self.pos = pos
         if neighbors is None:
             self.neighbors = []
         else:
             self.neighbors = list(neighbors)
-        self.color = np.array(color)
+        self.i = None
+        self.colors = None
 
         # Polar coordinates
         x,y,z = pos
@@ -106,11 +107,16 @@ class LED():
         self.theta = np.arctan2(z, np.sqrt(xy))
         self.phi = np.arctan2(y,x)
 
+    def get_color(self):
+        return self.colors[self.i,:]
+
     def set_color(self, color):
-        np.copyto(self.color, color)
+        self.colors[self.i,:] = color
+
+    color = property(get_color, set_color)
 
     def turn_off(self):
-        self.color.fill(0)
+        self.colors[self.i,:].fill(0)
 
 
 # Main class
@@ -152,15 +158,23 @@ class Dodecahedron():
             if v is e1.v1: e1.neighbors1 = [e0,e2]
             if v is e2.v0: e2.neighbors0 = [e0,e1]
             if v is e2.v1: e2.neighbors1 = [e0,e1]
-        self.faces = [Face(fn, self.vertices, self.edges) for fn in face_normals]
+
+        # Connect LEDs with underlying color array
+        self.leds = list(chain(*[e.leds for e in self.edges]))
+        self.colors = np.zeros((len(self.leds), 3))
+        for i, led in enumerate(self.leds):
+            led.i = i
+            led.colors = self.colors
 
         # Construct separate LED neighborhood graph
-        self.leds = list(chain(*[e.leds for e in self.edges]))
         for i in range(len(self.leds)):
             for j in range(i):
                 if 0 < np.linalg.norm(self.leds[i].pos - self.leds[j].pos) <= 1.999 * (2/r) / (leds_per_edge + 1):
                     self.leds[i].neighbors.append(self.leds[j])
                     self.leds[j].neighbors.append(self.leds[i])
+
+        # Set up faces in their own structure
+        self.faces = [Face(fn, self.vertices, self.edges) for fn in face_normals]
 
         # Get animations going
         self.animation_index = -1
