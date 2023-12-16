@@ -351,7 +351,7 @@ class Glitter(Animation):
                 color = self.hls_to_rgb(np.random.rand(), 0.8, 1)
             else:
                 color = self.color
-            led = np.random.choice(self.d.leds)
+            led = self.d.leds[np.random.randint(len(self.d.leds))]
             led.set_color(np.minimum(255, led.color + color))
 
 
@@ -362,15 +362,15 @@ class RollingHue(Animation):
         self.speed = speed
 
     def step(self, t_delta_ms=0):
+        phase = self.speed * time()
         for edge in self.d.edges:
-            for led in edge.leds[::2]:
-                hue = np.sin(led.theta + self.speed * time())/2 + 0.5
-                lightness = np.sin(self.speed * time())/4 + 0.25
-                led.color = np.array(hls_to_rgb(hue, lightness, 1.0)) * 255
-            for led in edge.leds[1::2]:
-                hue = np.sin(led.theta + self.speed * time())/2 + 0.5
-                lightness = np.sin(self.speed * time() + np.pi)/4 + 0.25
-                led.color = np.array(hls_to_rgb(hue, lightness, 1.0)) * 255
+            for i, led in enumerate(edge.leds):
+                hue = np.sin(led.theta + phase)/2 + 0.5
+                if i%2 == 0:
+                    lightness = np.sin(phase)/4 + 0.25
+                else:
+                    lightness = np.sin(phase + np.pi)/4 + 0.25
+                led.set_color(self.hls_to_rgb(hue, lightness))
 
 
 class Hamiltonian(Animation):
