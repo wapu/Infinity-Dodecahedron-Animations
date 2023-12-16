@@ -509,7 +509,54 @@ class RotatingTiles(Animation):
 
 
 class WanderingLanterns(Animation):
-    pass
+
+    class Lantern():
+
+        def __init__(self, color, speed):
+            self.color = color
+            self.speed = speed
+            self.theta = np.random.rand() * 2*np.pi
+            self.phi =  np.random.rand() * 2*np.pi
+            self.v_theta = speed * np.random.randn()
+            self.v_phi = speed * np.random.randn()
+
+        def cartesian(self, r=np.sqrt(3)):
+            pos = np.zeros(3)
+            pos[0] = r * np.sin(self.theta) * np.cos(self.phi)
+            pos[1] = r * np.sin(self.theta) * np.sin(self.phi)
+            pos[2] = r * np.cos(self.theta)
+            return pos
+
+    def __init__(self, dodecahedron, n=10, speed=0.05):
+        super().__init__(dodecahedron)
+        self.lanterns = [self.Lantern(self.random_hue(), speed) for i in range(n)]
+        self.scale = 3
+        self.spread = .3
+        self.cutoff = 1.5 * np.sqrt(self.spread)
+        self.pos_leds = np.vstack([l.pos for l in self.d.leds])
+
+    def step(self, t_delta_ms=0):
+        # Move lanterns
+        for lantern in self.lanterns:
+            lantern.v_theta = 0.75 * (lantern.v_theta + lantern.speed * np.random.randn())
+            lantern.v_phi = 0.75 * (lantern.v_phi + lantern.speed * np.random.randn())
+            lantern.theta = (lantern.theta + lantern.v_theta) % (2*np.pi)
+            lantern.phi = (lantern.phi + lantern.v_phi) % (2*np.pi)
+
+        # Vectorized distance matrix for efficiency
+        pos_lanterns = np.vstack([l.cartesian(self.d.radius) for l in self.lanterns])
+        dists = np.sum((self.pos_leds[:,None,:] - pos_lanterns[None,:,:])**2, axis=2)**0.5
+
+        # Add up light contributions from all lanterns
+        for i, led in enumerate(self.d.leds):
+            color = np.zeros(3)
+            for j, lantern in enumerate(self.lanterns):
+                dist = dists[i,j]
+                if dist < self.cutoff:
+                    rbf = self.scale * np.e**(-dist / self.spread)
+                    color += lantern.color * rbf
+            led.set_color(np.minimum(255, color))
+
 
 
 class StreamFromCorner(Animation):
@@ -519,6 +566,7 @@ class StreamFromCorner(Animation):
 
 
 ANIMATION_CYCLE = [
+    WanderingLanterns,
     RotatingTiles,
     Lightning,
     CornerFireworks,
