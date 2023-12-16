@@ -121,7 +121,7 @@ class Dodecahedron():
         self.leds_per_edge = leds_per_edge
 
         # Dodecahedron coordinates
-        r = (1 + np.sqrt(5)) / 2
+        r = (1 + np.sqrt(5)) / 2 # golden ratio
         coords = np.array([
             (1, 1, 1),   (1, 1, -1),   (1, -1, 1),   (1, -1, -1),
             (-1, 1, 1),  (-1, 1, -1),  (-1, -1, 1),  (-1, -1, -1),
@@ -135,6 +135,7 @@ class Dodecahedron():
             (1, r, 0), (1, -r, 0), (-1, r, 0), (-1, -r, 0),
             (r, 0, 1), (r, 0, -1), (-r, 0, 1), (-r, 0, -1)
         ])
+        self.radius = np.sqrt(3)
 
         # Construct dodecahedron graph
         self.vertices = [Vertex(c) for c in coords]

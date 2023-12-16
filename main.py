@@ -32,6 +32,8 @@ done = False
 pause = False
 angle = 0
 d = Dodecahedron(LEDS_PER_EDGE)
+times = []
+peak_power = 0
 
 
 # Main loop
@@ -47,6 +49,8 @@ while not done:
             else:
                 # Cycle through animations
                 d.next_animation()
+                times.clear()
+                peak_power = 0
 
     # Preparation
     t_delta_ms = clock.tick(FPS)
@@ -55,7 +59,10 @@ while not done:
     screen.fill((0,0,0))
 
     # Animate LEDs
+    t_step = time()
     d.animation.step(t_delta_ms)
+    times.append(time() - t_step)
+    mean_time = np.mean(times[-100:])
 
     # Rotate camera matrix
     angle += 0.001 * np.pi
@@ -74,8 +81,11 @@ while not done:
 
     # Display power consumption
     power = np.mean(d.get_colors()/255)
-    screen.blit(font.render(f'{power*100:.0f}% of max RGB usage', False, (255,255,255)), (10, 10))
-    screen.blit(font.render(f'{power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f} Ampere at {LED_SCALE*100:.0f}% LED power', False, (255,255,255)), (10, 45))
+    peak_power = max(power, peak_power)
+    screen.blit(font.render(f'{power*100:02.0f}% of max RGB usage (peak {peak_power*100:.0f}%)', False, (255,255,255)), (10, 10))
+    screen.blit(font.render(f'{power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f} Ampere at {LED_SCALE*100:.0f}% LED power ' +
+        f'(peak {peak_power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f}A)', False, (255,255,255)), (10, 45))
+    screen.blit(font.render(f'Avg CPU/frame: {1000*mean_time:.1f}ms ({1/mean_time:.0f} FPS)', False, (255,255,255)), (10, HEIGHT - 75))
     screen.blit(font.render(f'Animation: "{d.animation.__class__.__name__}"', False, (255,255,255)), (10, HEIGHT - 40))
 
     # Show new frame
