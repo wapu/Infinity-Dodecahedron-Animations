@@ -48,7 +48,7 @@ while not done:
                 pause = not pause
             else:
                 # Cycle through animations
-                d.next_animation()
+                d.next_animation(prev=(e.key == pygame.K_LEFT))
                 times.clear()
                 peak_power = 0
 
@@ -86,7 +86,7 @@ while not done:
     screen.blit(font.render(f'{power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f} Ampere at {LED_SCALE*100:.0f}% LED power ' +
         f'(peak {peak_power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f}A)', False, (255,255,255)), (10, 45))
     screen.blit(font.render(f'Avg CPU/frame: {1000*mean_time:.1f}ms ({1/mean_time:.0f} FPS)', False, (255,255,255)), (10, HEIGHT - 75))
-    screen.blit(font.render(f'Animation: "{d.animation.__class__.__name__}"', False, (255,255,255)), (10, HEIGHT - 40))
+    screen.blit(font.render(f'Animation {d.animation_index+1}/{len(ANIMATION_CYCLE)}: "{d.animation.__class__.__name__}"', False, (255,255,255)), (10, HEIGHT - 40))
 
     # Show new frame
     pygame.display.update()

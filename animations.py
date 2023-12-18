@@ -2,6 +2,7 @@ import numpy as np
 from colorsys import hls_to_rgb
 from time import time
 from collections import deque
+from itertools import chain
 
 from colors import *
 
@@ -14,6 +15,9 @@ class Animation():
 
     def initialize(self):
         self.d.colors.fill(0)
+
+    def clean_up(self):
+        pass
 
     def hermite(self, t):
         return 3*t*t - 2*t*t*t
@@ -85,27 +89,42 @@ class Particle():
                         self.state = self.DEAD
                     elif self.end_style == 'linear':
                         self.state = self.DYING
-                        self.color = np.maximum(0, self.color - self.color_decrement/2)
+                        self.color = clamp(self.color - self.color_decrement/2)
                         if self.color.sum() == 0:
                             self.state = self.DEAD
                 if self.state == self.DEAD:
-                    if np.sum([led.color for led in self.trail]) == 0:
+                    if np.sum([led.color for led in self.trail]) < 1:
+                        for led in self.trail:
+                            led.turn_off()
                         self.state = self.GONE
 
 
         # Move particle further along LED graph
         if self.state in [self.ALIVE, self.DYING]:
-            next_options = [n for n in self.led.neighbors if n not in self.blocked]
-            if self.swarm is None or len(next_options) == 1:
+            if self.led.neighbors_downstream is None:
+                next_options = [n for n in self.led.neighbors if n not in self.blocked]
+            else:
+                next_options = [n for n in self.led.neighbors_downstream if n not in self.blocked]
+
+            if len(next_options) == 0:
+                self.duration = 0
+                self.state = self.DEAD
+                next = self.led
+            elif len(next_options) == 1:
+                next = next_options[0]
+            elif self.swarm is None:
                 next = np.random.choice(next_options)
             else:
+                # In swarm mode, try to move away from nearest swarm member
                 d_swarm = [(np.linalg.norm(self.led.pos - p.led.pos) + 0.001*np.random.rand(), p) for p in self.swarm if p is not self]
                 nearest_pos = sorted(d_swarm)[0][1].led.pos
                 d_options = [(np.linalg.norm(led.pos - nearest_pos) + 0.001*np.random.rand(), led) for led in next_options]
                 next = sorted(d_options)[-1][1]
-            self.blocked = next_options + [self.led]
-            self.led = next
-            self.led.color = np.minimum(255, self.led.color + self.color)
+
+            if next is not None:
+                self.blocked = next_options + [self.led]
+                self.led = next
+                self.led.color = clamp(self.led.color + self.color)
 
 
 
@@ -538,12 +557,62 @@ class WanderingLanterns(Animation):
 
 
 class StreamFromCorner(Animation):
-    pass
 
+    def __init__(self, dodecahedron, interval=.25, duration=10, trail_style='exponential'):
+        super().__init__(dodecahedron)
+        self.interval = interval
+        self.timer = 0
+        self.duration = duration
+        self.trail_style = trail_style
+        self.sparks = []
+        self.pos_leds = np.vstack([l.pos for l in self.d.leds])
 
+    def initialize(self):
+        self.d.colors.fill(0)
+
+        # Choose new corner to stream particles from
+        self.corner = np.random.choice(self.d.vertices)
+        self.starts = [e.leds[0] if (e.v0 is self.corner) else e.leds[-1] for e in self.corner.edges]
+        self.hue_low = np.random.rand()
+        self.hue_high = self.hue_low + 0.2 * np.random.rand()
+        self.elapsed = 0
+
+        # Determine downstream neighbors for each LED, i.e. neighbors that are further away from source
+        dists = np.linalg.norm(self.pos_leds - self.corner.pos, axis=1)
+        # Block access to edges where both ends are equally far from source
+        blocked = list(chain(*[[e.leds[0], e.leds[-1]] for e in self.d.edges if np.abs(dists[e.leds[0].i] - dists[e.leds[-1].i]) < 0.001]))
+        for led in self.d.leds:
+            led.neighbors_downstream = [n for n in led.neighbors if dists[n.i] > dists[led.i] + 0.001 and n not in blocked]
+
+    def clean_up(self):
+        for led in self.d.leds:
+            led.neighbors_downstream = None
+
+    def step(self, t_delta_ms=0):
+        # Update existing sparks
+        self.sparks = [s for s in self.sparks if s.state != Particle.GONE]
+        for spark in self.sparks:
+            spark.step()
+
+        # Stream new sparks for <duration>, then let them die and switch corner
+        self.elapsed += t_delta_ms / 1000
+        if self.elapsed < self.duration:
+            self.timer += t_delta_ms / 1000
+            if self.timer > self.interval:
+                self.timer -= self.interval
+
+                color = random_hue(self.hue_low, self.hue_high, 0.6, 1)
+                self.starts = self.starts[1:] + self.starts[:1]
+                spark = Particle(self.starts[0], color, 10, trail_style=self.trail_style)
+                spark.blocked = [self.starts[1], self.starts[2]]
+                self.sparks.append(spark)
+        else:
+            if len(self.sparks) == 0:
+                self.initialize()
 
 
 ANIMATION_CYCLE = [
+    StreamFromCorner,
     WanderingLanterns,
     RotatingTiles,
     Lightning,

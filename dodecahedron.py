@@ -177,6 +177,7 @@ class Dodecahedron():
         self.faces = [Face(fn, self.vertices, self.edges) for fn in face_normals]
 
         # Get animations going
+        self.animation = None
         self.animation_index = -1
         self.next_animation()
 
@@ -217,8 +218,10 @@ class Dodecahedron():
     def get_colors(self):
         return np.stack([led.color for led in self.leds])
 
-    def next_animation(self):
-        self.animation_index = (self.animation_index + 1) % len(ANIMATION_CYCLE)
+    def next_animation(self, prev=False):
+        if self.animation is not None:
+            self.animation.clean_up()
+        self.animation_index = (self.animation_index + (-1 if prev else 1)) % len(ANIMATION_CYCLE)
         self.animation = ANIMATION_CYCLE[self.animation_index](self)
         self.animation.initialize()
 
