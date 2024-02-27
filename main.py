@@ -14,7 +14,7 @@ from projection import *
 WIDTH = 1000
 HEIGHT = 1000
 FPS = 15
-LED_SCALE = .4
+LED_SCALE = 1
 LEDS_PER_EDGE = 17
 
 
@@ -31,7 +31,7 @@ font = pygame.font.SysFont('CMU Sans Serif', 30)
 done = False
 pause = False
 angle = 0
-d = Dodecahedron(LEDS_PER_EDGE)
+d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
 times = []
 peak_power = 0
 

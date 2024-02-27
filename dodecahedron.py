@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 from itertools import chain
 
 from animations import *
@@ -42,6 +43,7 @@ class Edge():
 
     def flip(self):
         self.v0, self.v1 = self.v1, self.v0
+        self.neighbors0, self.neighbors1 = self.neighbors1, self.neighbors0
         self.leds = self.leds[::-1]
 
     def fill(self, color):
@@ -123,7 +125,7 @@ class LED():
 
 class Dodecahedron():
 
-    def __init__(self, leds_per_edge):
+    def __init__(self, leds_per_edge, mapped_edges=None):
         self.leds_per_edge = leds_per_edge
 
         # Dodecahedron coordinates
@@ -158,6 +160,24 @@ class Dodecahedron():
             if v is e1.v1: e1.neighbors1 = [e0,e2]
             if v is e2.v0: e2.neighbors0 = [e0,e1]
             if v is e2.v1: e2.neighbors1 = [e0,e1]
+
+        # Reorder and reorient edges according to map
+        if mapped_edges is not None:
+            # Load from file and validate
+            try:
+                self.mapped_edges = pickle.load(open(mapped_edges, 'rb'))
+                assert all([i == i_e for i, i_e in enumerate(sorted(self.mapped_edges))])
+            except:
+                print('ERROR: Invalid edge map provided, proceeding unordered')
+            # Apply
+            ordered = []
+            for i in self.mapped_edges:
+                edge = self.edges[i]
+                if i > 0:
+                    if edge.v0 not in [ordered[-1].v0, ordered[-1].v1]:
+                        edge.flip()
+                ordered.append(edge)
+            self.edges = ordered
 
         # Connect LEDs with underlying color array
         self.leds = list(chain(*[e.leds for e in self.edges]))
