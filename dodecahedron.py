@@ -235,9 +235,6 @@ class Dodecahedron():
     def get_leds(self):
         return np.stack([led.pos for led in self.leds])
 
-    def get_colors(self):
-        return np.stack([led.color for led in self.leds])
-
     def next_animation(self, prev=False):
         if self.animation is not None:
             self.animation.clean_up()
