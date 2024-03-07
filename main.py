@@ -25,7 +25,7 @@ d = pickle.load(open('dodecahedron.pkl', 'rb'))
 
 # Set up LED strip
 print('Setting up NeoPixel strip...')
-pixels = neopixel.NeoPixel(board.D18, len(d.leds), auto_write=False, brightness=BRIGHTNESS)
+pixels = neopixel.NeoPixel(board.D18, len(d.leds), auto_write=False)
 
 # # Set up keyboard listener
 # print('Setting up keyboard listener...')
@@ -73,15 +73,15 @@ try:
             print('Error :(')
             break
 
-        # Lower brightness iff it exceeds set ampere threshold
-        ampere = (np.sum(d.colors)/255) * 0.060 * BRIGHTNESS
-        if ampere > MAX_AMPERE:
-            pixels.brightness = BRIGHTNESS * MAX_AMPERE/ampere
-        else:
-            pixels.brightness = BRIGHTNESS
+        # # Lower brightness iff it exceeds set ampere threshold
+        # ampere = (np.sum(d.colors)/255) * 0.060 * BRIGHTNESS
+        # if ampere > MAX_AMPERE:
+        #     pixels.brightness = BRIGHTNESS * MAX_AMPERE/ampere
+        # else:
+        #     pixels.brightness = BRIGHTNESS
 
         # Send data to LED strip
-        colors = d.colors.astype(int)
+        colors = (d.colors * BRIGHTNESS).astype(int)
         for i in range(len(d.leds)):
             pixels[i] = colors[i]
         pixels.show()
@@ -97,8 +97,10 @@ try:
         times.append(t_delta_ms)
         if len(times) > 1:
             print(f'{1000/np.mean(times[-100:][1:]):.0f} FPS  |  {ampere:.1f} A', flush=True)
+
 except Exception as e:
     print(f'Interrupted by {e}')
+
 finally:
     print('Turning off LEDs')
     # Turn off LED strip
