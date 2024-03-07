@@ -612,9 +612,9 @@ class StreamFromCorner(Animation):
 
 
 ANIMATION_CYCLE = [
+    RotatingTiles,
     StreamFromCorner,
     WanderingLanterns,
-    RotatingTiles,
     Lightning,
     CornerFireworks,
     FlashOpposingEdges,

@@ -1,8 +1,9 @@
 import numpy as np
+from pynput import keyboard
 from time import time, sleep
 
-# import board
-# import neopixel
+import board
+import neopixel
 
 from dodecahedron import *
 from projection import *
@@ -12,23 +13,28 @@ from projection import *
 # Constants
 FPS = 15
 MS_PER_FRAME = 1000/FPS
-LED_SCALE = 0.1
-MAX_AMPERE = 10
+BRIGHTNESS = 0.01
+MAX_AMPERE = 5
 LEDS_PER_EDGE = 17
 
-
+# Set up data structure
 d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
 
-
 # Set up LED strip
-# pixels = neopixel.NeoPixel(board.D18, len(d.leds), brightness=LED_SCALE)
+pixels = neopixel.NeoPixel(board.D18, len(d.leds), brightness=BRIGHTNESS)
 
+# Set up keyboard listener
+key_queue = []
+def on_release(key):
+    global key_queue
+    key_queue.append(key)
+listener = keyboard.Listener(on_release=on_release, suppress=True)
+listener.start()
 
 # Main loop prep
 done = False
 t_delta_ms = 0
 times = []
-# peak_power = 0
 
 
 
@@ -37,38 +43,51 @@ while not done:
     # Measure time
     t_prev = time()
 
-    # Check events - TODO find out how to steer
-        # done = True
-        # d.next_animation(prev=False)
-        # times.clear()
-        # peak_power = 0
+    # Handle keyboard events
+    if len(key_queue) > 0:
+        key = key_queue.pop(0)
+        if key == keyboard.Key.esc:
+            done = True
+            break
+        elif key == keyboard.Key.left:
+            d.next_animation(prev=True)
+            times.clear()
+            print(f'prev animation: {d.animation.__class__.__name__}', flush=True)
+        elif key == keyboard.Key.right:
+            d.next_animation(prev=False)
+            times.clear()
+            print(f'next animation: {d.animation.__class__.__name__}', flush=True)
 
-    # Animate LEDs
-    d.animation.step(t_delta_ms)
+    # Run animation
+    try:
+        d.animation.step(t_delta_ms)
+    except:
+        done = True
+        print('Error :(')
+        break
 
-    # Clamp power usage and send data out
-    ampere = (np.sum(d.colors)/255) * 0.060 * LED_SCALE
+    # Lower brightness iff it exceeds set ampere threshold
+    ampere = (np.sum(d.colors)/255) * 0.060 * BRIGHTNESS
     if ampere > MAX_AMPERE:
-        # pixels.brightness = LED_SCALE * ampere/MAX_AMPERE
-        pass
+        pixels.brightness = BRIGHTNESS * MAX_AMPERE/ampere
     else:
-        # pixels.brightness = LED_SCALE
-        pass
-    # for i in range(len(d.leds)):
-    #     pixels[i] = int(d.colors[i, 0]), int(d.colors[i, 1]), int(d.colors[i, 2])
+        pixels.brightness = BRIGHTNESS
+
+    # Send data to LED strip
+    for i in range(len(d.leds)):
+        pixels[i] = int(d.colors[i, 0]), int(d.colors[i, 1]), int(d.colors[i, 2])
 
     # Measure time
     t_delta_ms = (time() - t_prev) * 1000
-    times.append(t_delta_ms)
 
-    # Maintain max FPS
+    # Don't go faster than set FPS
     if t_delta_ms < MS_PER_FRAME:
         sleep((MS_PER_FRAME - t_delta_ms)/1000)
 
     # Console output
-    # power = np.mean(d.colors / 255)
-    # peak_power = max(power, peak_power)
-    # f'{power*100:02.0f}% of max RGB usage (peak {peak_power*100:.0f}%)'
-    # f'{power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f} Ampere at {LED_SCALE*100:.0f}% LED power (peak {peak_power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f}A)'
-    print(f'{1000/np.mean(times[-100:]):.0f} FPS', flush=True)
-    # f'Animation {d.animation_index+1}/{len(ANIMATION_CYCLE)}: "{d.animation.__class__.__name__}"'
+    times.append(t_delta_ms)
+    print(f'{1000/np.mean(times[-100:][1:]):.0f} FPS  |  {ampere:.1f} A', flush=True)
+
+
+# Turn off LED strip
+pixels.fill((0,0,0))
