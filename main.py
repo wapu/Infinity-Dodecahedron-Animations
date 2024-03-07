@@ -1,5 +1,5 @@
 import numpy as np
-from pynput import keyboard
+# from pynput import keyboard
 from time import time, sleep
 
 import board
@@ -18,18 +18,21 @@ MAX_AMPERE = 5
 LEDS_PER_EDGE = 17
 
 # Set up data structure
+print('Setting up data structure...')
 d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
 
 # Set up LED strip
+print('Setting up NeoPixel strip...')
 pixels = neopixel.NeoPixel(board.D18, len(d.leds), brightness=BRIGHTNESS)
 
-# Set up keyboard listener
-key_queue = []
-def on_release(key):
-    global key_queue
-    key_queue.append(key)
-listener = keyboard.Listener(on_release=on_release, suppress=True)
-listener.start()
+# # Set up keyboard listener
+# print('Setting up keyboard listener...')
+# key_queue = []
+# def on_release(key):
+#     global key_queue
+#     key_queue.append(key)
+# listener = keyboard.Listener(on_release=on_release, suppress=True)
+# listener.start()
 
 # Main loop prep
 done = False
@@ -39,24 +42,25 @@ times = []
 
 
 # Main loop
+print('Entering main loop...')
 while not done:
     # Measure time
     t_prev = time()
 
-    # Handle keyboard events
-    if len(key_queue) > 0:
-        key = key_queue.pop(0)
-        if key == keyboard.Key.esc:
-            done = True
-            break
-        elif key == keyboard.Key.left:
-            d.next_animation(prev=True)
-            times.clear()
-            print(f'prev animation: {d.animation.__class__.__name__}', flush=True)
-        elif key == keyboard.Key.right:
-            d.next_animation(prev=False)
-            times.clear()
-            print(f'next animation: {d.animation.__class__.__name__}', flush=True)
+    # # Handle keyboard events
+    # if len(key_queue) > 0:
+    #     key = key_queue.pop(0)
+    #     if key == keyboard.Key.esc:
+    #         done = True
+    #         break
+    #     elif key == keyboard.Key.left:
+    #         d.next_animation(prev=True)
+    #         times.clear()
+    #         print(f'prev animation: {d.animation.__class__.__name__}', flush=True)
+    #     elif key == keyboard.Key.right:
+    #         d.next_animation(prev=False)
+    #         times.clear()
+    #         print(f'next animation: {d.animation.__class__.__name__}', flush=True)
 
     # Run animation
     try:
@@ -86,7 +90,8 @@ while not done:
 
     # Console output
     times.append(t_delta_ms)
-    print(f'{1000/np.mean(times[-100:][1:]):.0f} FPS  |  {ampere:.1f} A', flush=True)
+    if len(times) > 1:
+        print(f'{1000/np.mean(times[-100:][1:]):.0f} FPS  |  {ampere:.1f} A', flush=True)
 
 
 # Turn off LED strip

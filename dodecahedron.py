@@ -146,6 +146,7 @@ class Dodecahedron():
         self.radius = np.sqrt(3)
 
         # Construct dodecahedron graph
+        print('Constructing dodecahedron graph (vertices and edges)')
         self.vertices = [Vertex(c) for c in coords]
         self.edges = []
         for i in range(len(coords)):
@@ -162,6 +163,7 @@ class Dodecahedron():
             if v is e2.v1: e2.neighbors1 = [e0,e1]
 
         # Reorder and reorient edges according to map
+        print(f'Arranging edges according to stored map "{mapped_edges}"')
         if mapped_edges is not None:
             # Load from file and validate
             try:
@@ -180,6 +182,7 @@ class Dodecahedron():
             self.edges = ordered
 
         # Connect LEDs with underlying color array
+        print('Connecting LEDs with numpy color array')
         self.leds = list(chain(*[e.leds for e in self.edges]))
         self.colors = np.zeros((len(self.leds), 3))
         for i, led in enumerate(self.leds):
@@ -187,6 +190,7 @@ class Dodecahedron():
             led.colors = self.colors
 
         # Construct separate LED neighborhood graph
+        print('Constructing LED neighborhood graph')
         for i in range(len(self.leds)):
             for j in range(i):
                 if 0 < np.linalg.norm(self.leds[i].pos - self.leds[j].pos) <= 1.999 * (2/r) / (leds_per_edge + 1):
@@ -194,9 +198,11 @@ class Dodecahedron():
                     self.leds[j].neighbors.append(self.leds[i])
 
         # Set up faces in their own structure
+        print('Setting up data structure for dodecahedron faces')
         self.faces = [Face(fn, self.vertices, self.edges) for fn in face_normals]
 
         # Get animations going
+        print('Initializing first animation')
         self.animation = None
         self.animation_index = -1
         self.next_animation()
