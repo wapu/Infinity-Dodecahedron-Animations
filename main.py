@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 # from pynput import keyboard
 from time import time, sleep
 
@@ -19,11 +20,12 @@ LEDS_PER_EDGE = 17
 
 # Set up data structure
 print('Setting up data structure...')
-d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
+# d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
+d = pickle.load(open('dodecahedron.pkl', 'rb'))
 
 # Set up LED strip
 print('Setting up NeoPixel strip...')
-pixels = neopixel.NeoPixel(board.D18, len(d.leds), brightness=BRIGHTNESS)
+pixels = neopixel.NeoPixel(board.D18, len(d.leds), auto_write=False, brightness=BRIGHTNESS)
 
 # # Set up keyboard listener
 # print('Setting up keyboard listener...')
@@ -78,8 +80,10 @@ while not done:
         pixels.brightness = BRIGHTNESS
 
     # Send data to LED strip
+    color = d.colors.astype(int)
     for i in range(len(d.leds)):
-        pixels[i] = int(d.colors[i, 0]), int(d.colors[i, 1]), int(d.colors[i, 2])
+        pixels[i] = colors[i]
+    pixels.show()
 
     # Measure time
     t_delta_ms = (time() - t_prev) * 1000

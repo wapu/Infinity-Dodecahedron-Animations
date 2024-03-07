@@ -2,7 +2,9 @@ import contextlib
 with contextlib.redirect_stdout(None):
     import pygame
     import pygame.draw
+import pickle
 import numpy as np
+from sys import setrecursionlimit
 from time import time
 
 from dodecahedron import *
@@ -31,10 +33,17 @@ font = pygame.font.SysFont('CMU Sans Serif', 30)
 done = False
 pause = False
 angle = 0
-d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
 times = []
 peak_power = 0
 
+try:
+    print('Trying to unpickle dodecahedron object')
+    d = pickle.load(open('dodecahedron.pkl', 'rb'))
+except:
+    print('Failed, creating new instead')
+    d = Dodecahedron(LEDS_PER_EDGE, mapped_edges='mapped_edges.pkl')
+    setrecursionlimit(10000)
+    pickle.dump(d, open('dodecahedron.pkl', 'wb'))
 
 # Main loop
 while not done:
@@ -75,12 +84,12 @@ while not done:
         pygame.draw.line(screen, (5,5,5), v0, v1, width=int(15/(z0+z1)))
     # LEDs sorted and scaled by distance
     leds, dists = project(camera_matrix, d.get_leds(), (WIDTH, HEIGHT))
-    leds = sorted(zip(leds, dists, d.get_colors()), key=lambda pzc: pzc[1])
+    leds = sorted(zip(leds, dists, d.colors), key=lambda pzc: pzc[1])
     for led, dist, color in leds:
         pygame.draw.circle(screen, color, led, radius=6 * 1/dist)
 
     # Display power consumption
-    power = np.mean(d.get_colors()/255)
+    power = np.mean(d.colors/255)
     peak_power = max(power, peak_power)
     screen.blit(font.render(f'{power*100:02.0f}% of max RGB usage (peak {peak_power*100:.0f}%)', False, (255,255,255)), (10, 10))
     screen.blit(font.render(f'{power*60*30*LEDS_PER_EDGE*LED_SCALE/1000:.1f} Ampere at {LED_SCALE*100:.0f}% LED power ' +
