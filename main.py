@@ -80,10 +80,14 @@ try:
         # else:
         #     pixels.brightness = BRIGHTNESS
 
-        # Send data to LED strip
-        colors = (d.colors * BRIGHTNESS).astype(int)
-        for i in range(len(d.leds)):
-            pixels[i] = colors[i]
+        # # Send data to LED strip
+        # colors = (d.colors * BRIGHTNESS).astype(int)
+        # for i in range(len(d.leds)):
+        #     pixels[i] = colors[i]
+        # pixels.show()
+
+        # Write directly to the NeoPixel buffer
+        pixels._post_brightness_buffer[pixels._offset : pixels._offset + 3*len(d.leds)] = np.round(d.colors * BRIGHTNESS).astype(np.uint8)
         pixels.show()
 
         # Measure time
