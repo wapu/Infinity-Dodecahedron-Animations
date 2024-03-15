@@ -87,7 +87,9 @@ try:
         # pixels.show()
 
         # Write directly to the NeoPixel buffer
-        pixels._post_brightness_buffer[pixels._offset : pixels._offset + 3*len(d.leds)] = np.round(d.colors * BRIGHTNESS).astype(np.uint8)
+        bytes = np.round(d.colors * BRIGHTNESS).astype(np.uint8)
+        print(np.min(bytes), np.max(bytes), bytes.shape)
+        pixels._post_brightness_buffer[pixels._offset : pixels._offset + 3*len(d.leds)] = bytes.tolist()
         pixels.show()
 
         # Measure time
